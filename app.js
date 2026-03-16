@@ -37,9 +37,16 @@ function saveDeck(deck) {
   }
 }
 
+function generateId() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxx-xxxx-xxxx'.replace(/x/g, () =>
+    Math.floor(Math.random() * 16).toString(16)
+  );
+}
+
 function addCard(deck, type, front, back, dateAdded) {
   deck.cards.push({
-    id: crypto.randomUUID(),
+    id: generateId(),
     type,
     front: front || '',
     back: back || '',
