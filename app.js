@@ -73,28 +73,27 @@ function addCard(deck, type, front, back, dateAdded) {
 function ensureDailyWild(deck) {
   const t = today();
 
-  // Find the latest Wild card date in the actual data
-  let latestWildDate = null;
+  // Build a set of dates that already have a Wild card
+  const wildDates = new Set();
   for (const c of deck.cards) {
-    if (c.type === 'Wild' && (!latestWildDate || c.dateAdded > latestWildDate)) {
-      latestWildDate = c.dateAdded;
+    if (c.type === 'Wild') wildDates.add(c.dateAdded);
+  }
+
+  // Ensure a Wild card exists for every day in the last 58 days
+  // (58 is the max schedule offset)
+  let added = false;
+  for (let i = 0; i <= 58; i++) {
+    const d = dateNDaysAgoFrom(t, i);
+    if (!wildDates.has(d)) {
+      addCard(deck, 'Wild', '', '', d);
+      added = true;
     }
   }
 
-  // If we already have a Wild for today, nothing to do
-  if (latestWildDate === t) return;
-
-  // Backfill from the day after the latest Wild card to today
-  const startDate = latestWildDate ? addDays(latestWildDate, 1) : t;
-
-  let d = startDate;
-  while (d <= t) {
-    addCard(deck, 'Wild', '', '', d);
-    d = addDays(d, 1);
+  if (added) {
+    deck.lastWildDate = t;
+    saveDeck(deck);
   }
-
-  deck.lastWildDate = t;
-  saveDeck(deck);
 }
 
 // ─── Wild Card Resolution ───
