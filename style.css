@@ -74,10 +74,45 @@ header h1 {
   letter-spacing: -0.3px;
 }
 
+#date-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
 #date-display {
   font-size: 13px;
   color: var(--text-dim);
-  margin-top: 4px;
+  min-width: 180px;
+  text-align: center;
+}
+
+#date-display.is-today {
+  color: var(--text-dim);
+}
+
+#date-display:not(.is-today) {
+  color: var(--accent);
+}
+
+#btn-prev-day, #btn-next-day {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 4px;
+  transition: color 0.2s;
+}
+
+#btn-prev-day:active, #btn-next-day:active {
+  color: var(--text);
+}
+
+#btn-next-day.at-today {
+  opacity: 0.2;
+  pointer-events: none;
 }
 
 /* ─── Card List ─── */

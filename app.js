@@ -19,9 +19,15 @@ function today() {
   return new Date().toISOString().split('T')[0];
 }
 
-function dateNDaysAgo(n) {
-  const d = new Date();
+function dateNDaysAgoFrom(baseDate, n) {
+  const d = new Date(baseDate + 'T00:00:00');
   d.setDate(d.getDate() - n);
+  return d.toISOString().split('T')[0];
+}
+
+function addDays(dateStr, n) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + n);
   return d.toISOString().split('T')[0];
 }
 
@@ -88,23 +94,29 @@ function resolveWildType(stackTypes) {
 
 // ─── Build Daily Stack ───
 
-function buildDailyStack(deck) {
+function buildDailyStack(deck, forDate) {
   const stack = []; // each entry: { card, offsetIndex }
 
   for (let oi = 0; oi < SCHEDULE_OFFSETS.length; oi++) {
-    const targetDate = dateNDaysAgo(SCHEDULE_OFFSETS[oi]);
+    const targetDate = dateNDaysAgoFrom(forDate, SCHEDULE_OFFSETS[oi]);
     const matches = deck.cards.filter(c => c.dateAdded === targetDate);
     for (const m of matches) stack.push({ card: m, offsetIndex: oi });
   }
 
   // Resolve Wild cards: determine their display type
-  // Persist resolved type per day so it doesn't re-roll on refresh
-  const t = today();
+  // Wild resolutions are keyed by forDate so each day's draw is stable
   // Pre-fill resolved types: use persisted Wild resolutions if available
   const resolvedTypes = stack.map(e => {
     if (e.card.type === 'Wild') {
       const orig = deck.cards.find(c => c.id === e.card.id);
-      if (orig && orig.wildResolvedType && orig.wildResolvedDate === t) {
+      // Check if resolution exists for this viewing date
+      if (orig && orig.wildResolutions && orig.wildResolutions[forDate]) {
+        return orig.wildResolutions[forDate];
+      }
+      // Legacy: migrate old single-date format
+      if (orig && orig.wildResolvedType && orig.wildResolvedDate === forDate) {
+        if (!orig.wildResolutions) orig.wildResolutions = {};
+        orig.wildResolutions[forDate] = orig.wildResolvedType;
         return orig.wildResolvedType;
       }
       return null; // needs resolving
@@ -126,10 +138,10 @@ function buildDailyStack(deck) {
         const currentTypes = resolvedTypes.filter(Boolean);
         resolved = resolveWildType(currentTypes);
         resolvedTypes[i] = resolved;
-        // Persist on the original card
+        // Persist on the original card, keyed by viewing date
         if (original) {
-          original.wildResolvedType = resolved;
-          original.wildResolvedDate = t;
+          if (!original.wildResolutions) original.wildResolutions = {};
+          original.wildResolutions[forDate] = resolved;
           deckChanged = true;
         }
       }
@@ -139,12 +151,17 @@ function buildDailyStack(deck) {
     }
   }
 
-  // Update dateLastViewed
-  for (const item of stackResolved) {
-    const original = deck.cards.find(c => c.id === item.id);
-    if (original) original.dateLastViewed = t;
+  // Only update dateLastViewed when viewing today
+  if (forDate === today()) {
+    for (const item of stackResolved) {
+      const original = deck.cards.find(c => c.id === item.id);
+      if (original) original.dateLastViewed = forDate;
+    }
   }
-  saveDeck(deck);
+
+  if (deckChanged || forDate === today()) {
+    saveDeck(deck);
+  }
 
   return stackResolved;
 }
@@ -249,7 +266,7 @@ function exportCSV(deck) {
 
 // ─── UI ───
 
-let deck, stack, completedSet;
+let deck, stack, completedSet, viewingDate;
 
 async function init() {
   deck = loadDeck();
@@ -264,16 +281,16 @@ async function init() {
     delete window.__SEED_CSV;
   }
 
+  viewingDate = today();
   ensureDailyWild(deck);
-  stack = buildDailyStack(deck);
-  completedSet = new Set(
-    JSON.parse(localStorage.getItem('completed-today-' + today()) || '[]')
-  );
+  stack = buildDailyStack(deck, viewingDate);
+  completedSet = loadCompleted(viewingDate);
 
   renderDate();
   renderList();
   setupVocabOverlay();
   setupNav();
+  setupDateNav();
   setupManage();
 
   // Firebase sync
@@ -295,30 +312,77 @@ async function init() {
         deck = remoteDeck;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(deck));
         ensureDailyWild(deck);
-        stack = buildDailyStack(deck);
+        stack = buildDailyStack(deck, viewingDate);
         renderList();
       }
     });
 
-    // Listen for remote completion changes
-    const completedKey = 'completed-today-' + today();
-    FirebaseSync.onCompletedChanged(completedKey, (ids) => {
-      completedSet = new Set(ids || []);
-      localStorage.setItem(completedKey, JSON.stringify([...completedSet]));
-      renderList();
-    });
+    // Listen for remote completion changes for current viewing date
+    let currentCompletedKey = null;
+    function listenToCompleted() {
+      const key = 'completed-today-' + viewingDate;
+      if (currentCompletedKey && currentCompletedKey !== key) {
+        FirebaseSync.offCompleted(currentCompletedKey);
+      }
+      currentCompletedKey = key;
+      FirebaseSync.onCompletedChanged(key, (ids) => {
+        completedSet = new Set(ids || []);
+        localStorage.setItem(key, JSON.stringify([...completedSet]));
+        renderList();
+      });
+    }
+    listenToCompleted();
+
+    // Re-listen when date changes
+    window._onDateChanged = listenToCompleted;
   }
 }
 
+function loadCompleted(dateStr) {
+  return new Set(
+    JSON.parse(localStorage.getItem('completed-today-' + dateStr) || '[]')
+  );
+}
+
 function renderDate() {
-  const d = new Date();
-  document.getElementById('date-display').textContent =
-    d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const d = new Date(viewingDate + 'T00:00:00');
+  const dateEl = document.getElementById('date-display');
+  const isToday = viewingDate === today();
+
+  dateEl.textContent = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  dateEl.classList.toggle('is-today', isToday);
+
+  // Disable next button if viewing today
+  document.getElementById('btn-next-day').classList.toggle('at-today', isToday);
+}
+
+function switchToDate(newDate) {
+  viewingDate = newDate;
+  stack = buildDailyStack(deck, viewingDate);
+  completedSet = loadCompleted(viewingDate);
+  renderDate();
+  renderList();
+  if (window._onDateChanged) window._onDateChanged();
+}
+
+function setupDateNav() {
+  document.getElementById('btn-prev-day').addEventListener('click', () => {
+    switchToDate(addDays(viewingDate, -1));
+  });
+  document.getElementById('btn-next-day').addEventListener('click', () => {
+    if (viewingDate < today()) {
+      switchToDate(addDays(viewingDate, 1));
+    }
+  });
 }
 
 function getScheduleLabel(offsetIndex) {
-  const labels = ['Today', '1 day ago', '4 days ago', '11 days ago', '27 days ago', '58 days ago'];
-  return labels[offsetIndex] || '';
+  const offsets = SCHEDULE_OFFSETS;
+  const n = offsets[offsetIndex];
+  if (n === undefined) return '';
+  if (n === 0) return viewingDate === today() ? 'Today' : 'Day of';
+  if (n === 1) return '1 day ago';
+  return `${n} days ago`;
 }
 
 function escapeHTML(str) {
@@ -393,7 +457,7 @@ function toggleComplete(cardId, rowEl) {
     completedSet.add(cardId);
   }
   const arr = [...completedSet];
-  const key = 'completed-today-' + today();
+  const key = 'completed-today-' + viewingDate;
   localStorage.setItem(key, JSON.stringify(arr));
   if (window.FirebaseSync) {
     FirebaseSync.saveCompleted(key, arr);
@@ -480,7 +544,7 @@ function setupManage() {
         addCard(deck, c.type, c.front, c.back, c.dateAdded);
       }
       saveDeck(deck);
-      stack = buildDailyStack(deck);
+      stack = buildDailyStack(deck, viewingDate);
       toast(`Imported ${parsed.length} cards`);
       renderList();
       renderStats();
@@ -512,7 +576,7 @@ function setupManage() {
 
     addCard(deck, type, front, back, dateAdded);
     saveDeck(deck);
-    stack = buildDailyStack(deck);
+    stack = buildDailyStack(deck, viewingDate);
 
     document.getElementById('add-front').value = '';
     document.getElementById('add-back').value = '';

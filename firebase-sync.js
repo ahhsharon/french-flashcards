@@ -23,6 +23,8 @@ function deckToFirebase(deck) {
       dateAdded: c.dateAdded,
       dateLastViewed: c.dateLastViewed || null,
     };
+    if (c.wildResolutions) entry.wildResolutions = c.wildResolutions;
+    // Legacy support
     if (c.wildResolvedType) entry.wildResolvedType = c.wildResolvedType;
     if (c.wildResolvedDate) entry.wildResolvedDate = c.wildResolvedDate;
     cardsMap[c.id] = entry;
@@ -61,6 +63,10 @@ window.FirebaseSync = {
       const remoteDeck = firebaseToDeck(snap.val());
       callback(remoteDeck);
     });
+  },
+
+  offCompleted(dateKey) {
+    db.ref('completed/' + dateKey).off();
   },
 
   onCompletedChanged(dateKey, callback) {
