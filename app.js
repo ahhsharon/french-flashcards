@@ -15,20 +15,27 @@ const DISPLAY_NAMES = {
   Wild: 'Wild',
 };
 
+function formatLocalDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function today() {
-  return new Date().toISOString().split('T')[0];
+  return formatLocalDate(new Date());
 }
 
 function dateNDaysAgoFrom(baseDate, n) {
-  const d = new Date(baseDate + 'T00:00:00');
+  const d = new Date(baseDate + 'T12:00:00');
   d.setDate(d.getDate() - n);
-  return d.toISOString().split('T')[0];
+  return formatLocalDate(d);
 }
 
 function addDays(dateStr, n) {
-  const d = new Date(dateStr + 'T00:00:00');
+  const d = new Date(dateStr + 'T12:00:00');
   d.setDate(d.getDate() + n);
-  return d.toISOString().split('T')[0];
+  return formatLocalDate(d);
 }
 
 function loadDeck() {
@@ -345,7 +352,7 @@ function loadCompleted(dateStr) {
 }
 
 function renderDate() {
-  const d = new Date(viewingDate + 'T00:00:00');
+  const d = new Date(viewingDate + 'T12:00:00');
   const dateEl = document.getElementById('date-display');
   const isToday = viewingDate === today();
 
