@@ -73,11 +73,25 @@ function addCard(deck, type, front, back, dateAdded) {
 function ensureDailyWild(deck) {
   const t = today();
   if (deck.lastWildDate === t) return;
-  // Check if a Wild card for today was already imported
-  const alreadyHasWild = deck.cards.some(c => c.type === 'Wild' && c.dateAdded === t);
-  if (!alreadyHasWild) {
-    addCard(deck, 'Wild', '', '', t);
+
+  // Backfill Wild cards for any missed days since lastWildDate
+  let startDate;
+  if (deck.lastWildDate) {
+    startDate = addDays(deck.lastWildDate, 1);
+  } else {
+    // No previous wild date — just add for today
+    startDate = t;
   }
+
+  let d = startDate;
+  while (d <= t) {
+    const alreadyHasWild = deck.cards.some(c => c.type === 'Wild' && c.dateAdded === d);
+    if (!alreadyHasWild) {
+      addCard(deck, 'Wild', '', '', d);
+    }
+    d = addDays(d, 1);
+  }
+
   deck.lastWildDate = t;
   saveDeck(deck);
 }
