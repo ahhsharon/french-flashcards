@@ -72,23 +72,24 @@ function addCard(deck, type, front, back, dateAdded) {
 
 function ensureDailyWild(deck) {
   const t = today();
-  if (deck.lastWildDate === t) return;
 
-  // Backfill Wild cards for any missed days since lastWildDate
-  let startDate;
-  if (deck.lastWildDate) {
-    startDate = addDays(deck.lastWildDate, 1);
-  } else {
-    // No previous wild date — just add for today
-    startDate = t;
+  // Find the latest Wild card date in the actual data
+  let latestWildDate = null;
+  for (const c of deck.cards) {
+    if (c.type === 'Wild' && (!latestWildDate || c.dateAdded > latestWildDate)) {
+      latestWildDate = c.dateAdded;
+    }
   }
+
+  // If we already have a Wild for today, nothing to do
+  if (latestWildDate === t) return;
+
+  // Backfill from the day after the latest Wild card to today
+  const startDate = latestWildDate ? addDays(latestWildDate, 1) : t;
 
   let d = startDate;
   while (d <= t) {
-    const alreadyHasWild = deck.cards.some(c => c.type === 'Wild' && c.dateAdded === d);
-    if (!alreadyHasWild) {
-      addCard(deck, 'Wild', '', '', d);
-    }
+    addCard(deck, 'Wild', '', '', d);
     d = addDays(d, 1);
   }
 
