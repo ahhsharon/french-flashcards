@@ -73,24 +73,10 @@ function addCard(deck, type, front, back, dateAdded) {
 function ensureDailyWild(deck) {
   const t = today();
 
-  // Build a set of all dates that already have any card
-  const cardDates = new Set();
-  for (const c of deck.cards) {
-    cardDates.add(c.dateAdded);
-  }
-
-  // Add a Wild card for any day in the last 58 days that has no card at all
-  let added = false;
-  for (let i = 0; i <= 58; i++) {
-    const d = dateNDaysAgoFrom(t, i);
-    if (!cardDates.has(d)) {
-      addCard(deck, 'Wild', '', '', d);
-      cardDates.add(d);
-      added = true;
-    }
-  }
-
-  if (added) {
+  // Only add a Wild card for today if one doesn't already exist
+  const hasWildToday = deck.cards.some(c => c.type === 'Wild' && c.dateAdded === t);
+  if (!hasWildToday) {
+    addCard(deck, 'Wild', '', '', t);
     deck.lastWildDate = t;
     saveDeck(deck);
   }
