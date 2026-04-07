@@ -311,36 +311,52 @@ async function init() {
   }
 
   viewingDate = today();
-  ensureDailyWild(deck);
-  stack = buildDailyStack(deck, viewingDate);
-  completedSet = loadCompleted(viewingDate);
 
+  // Set up UI (doesn't depend on data)
   renderDate();
-  renderList();
   setupVocabOverlay();
   setupNav();
   setupDateNav();
   setupManage();
 
-  // Firebase sync
+  // If Firebase is available, wait for it and use as source of truth
+  // before running ensureDailyWild (to avoid overwrite races)
   if (window.FirebaseSync) {
     await FirebaseSync.ready;
 
-    // Listen for remote deck changes
-    let isFirstDeckSync = true;
+    // Do initial load from Firebase
+    let initialLoadDone = false;
+    let ignoreNextRemoteUpdate = false;
+
     FirebaseSync.onDeckChanged((remoteDeck) => {
-      // On first sync, if Firebase is empty, push local data up
-      if (isFirstDeckSync && remoteDeck.cards.length === 0 && deck.cards.length > 0) {
-        FirebaseSync.saveDeck(deck);
-        isFirstDeckSync = false;
+      if (!initialLoadDone) {
+        initialLoadDone = true;
+        // First sync: use Firebase data if it has cards, otherwise push local up
+        if (remoteDeck.cards.length === 0 && deck.cards.length > 0) {
+          // Firebase empty, push local data
+          ensureDailyWild(deck);
+        } else if (remoteDeck.cards.length > 0) {
+          // Firebase has data, use it as source of truth
+          deck = remoteDeck;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(deck));
+          ensureDailyWild(deck);
+        }
+        ignoreNextRemoteUpdate = true;
+        stack = buildDailyStack(deck, viewingDate);
+        completedSet = loadCompleted(viewingDate);
+        renderList();
         return;
       }
-      isFirstDeckSync = false;
+
+      // Subsequent remote updates
+      if (ignoreNextRemoteUpdate) {
+        ignoreNextRemoteUpdate = false;
+        return;
+      }
 
       if (remoteDeck.cards.length > 0) {
         deck = remoteDeck;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(deck));
-        ensureDailyWild(deck);
         stack = buildDailyStack(deck, viewingDate);
         renderList();
       }
@@ -364,6 +380,12 @@ async function init() {
 
     // Re-listen when date changes
     window._onDateChanged = listenToCompleted;
+  } else {
+    // No Firebase — use local data only
+    ensureDailyWild(deck);
+    stack = buildDailyStack(deck, viewingDate);
+    completedSet = loadCompleted(viewingDate);
+    renderList();
   }
 }
 
