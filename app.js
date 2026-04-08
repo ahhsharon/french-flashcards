@@ -425,6 +425,44 @@ function setupDateNav() {
       switchToDate(addDays(viewingDate, 1));
     }
   });
+
+  // Swipe left/right on card list to navigate days
+  const container = document.getElementById('card-list-container');
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let swiping = false;
+
+  container.addEventListener('touchstart', (e) => {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    swiping = true;
+  }, { passive: true });
+
+  container.addEventListener('touchmove', (e) => {
+    if (!swiping) return;
+    // If vertical scroll is dominant, cancel swipe detection
+    const dy = Math.abs(e.touches[0].clientY - touchStartY);
+    const dx = Math.abs(e.touches[0].clientX - touchStartX);
+    if (dy > dx) swiping = false;
+  }, { passive: true });
+
+  container.addEventListener('touchend', (e) => {
+    if (!swiping) return;
+    swiping = false;
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const MIN_SWIPE = 60;
+    if (Math.abs(dx) < MIN_SWIPE) return;
+
+    if (dx > 0) {
+      // Swipe right → previous day
+      switchToDate(addDays(viewingDate, -1));
+    } else {
+      // Swipe left → next day
+      if (viewingDate < today()) {
+        switchToDate(addDays(viewingDate, 1));
+      }
+    }
+  }, { passive: true });
 }
 
 function getScheduleLabel(offsetIndex) {
