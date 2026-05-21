@@ -274,14 +274,8 @@ function renderList() {
     row.className = `list-row row-type-${card.type}`;
     if (isCompleted) row.classList.add('completed');
 
-    // Legacy Vocab cards show their front text; new cards show the type name
-    const label = card.front || displayName;
-
     row.innerHTML = `
       <div class="row-type-badge">${escapeHTML(displayName)}</div>
-      <div class="row-content">
-        <div class="row-front">${escapeHTML(label)}</div>
-      </div>
       <button class="row-check" aria-label="Mark complete">${isCompleted ? '\u2713' : ''}</button>
     `;
 

@@ -135,17 +135,9 @@ header h1 {
   gap: 12px;
   background: var(--surface);
   border-radius: 12px;
-  padding: 14px 16px;
+  padding: 16px;
   transition: opacity 0.2s;
   cursor: default;
-}
-
-.list-row.is-vocab {
-  cursor: pointer;
-}
-
-.list-row.is-vocab:active {
-  opacity: 0.8;
 }
 
 .list-row.completed {
@@ -153,17 +145,11 @@ header h1 {
 }
 
 .row-type-badge {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  padding: 4px 0;
-  border-radius: 20px;
-  background: rgba(255,255,255,0.06);
-  white-space: nowrap;
-  flex-shrink: 0;
-  width: 72px;
-  text-align: center;
+  flex: 1;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  padding: 0;
 }
 
 .row-type-Vocab .row-type-badge { color: var(--type-vocab); }
@@ -173,26 +159,6 @@ header h1 {
 .row-type-Speaking .row-type-badge { color: var(--type-speaking); }
 .row-type-Languish .row-type-badge { color: var(--type-languish); }
 .row-type-Wild .row-type-badge { color: var(--type-wild); }
-
-.row-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.row-front {
-  font-size: 15px;
-  font-weight: 500;
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.row-schedule {
-  font-size: 11px;
-  color: var(--text-dim);
-  margin-top: 2px;
-}
 
 .row-check {
   flex-shrink: 0;
