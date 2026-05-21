@@ -5,11 +5,11 @@ const CARDS_PER_DAY = 6;
 const MAX_SAME_TYPE = 3;
 const CUTOVER_DATE = '2026-05-22';
 const DISPLAY_NAMES = {
-  Lingo: '💬 Lingo',
+  Lingo: '🎵 Lingo',
   Reading: '📖 Reading',
   Listening: '🎧 Listen',
   Speaking: '🗣️ Speaking',
-  Languish: '✨ Phrases',
+  Languish: '💬 Phrases',
   // Legacy types
   Vocab: '🃏 Vocab',
   Wild: '🎲 Wild',
