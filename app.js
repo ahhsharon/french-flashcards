@@ -50,11 +50,20 @@ function generateDayCards() {
   const cards = [];
   const counts = {};
   for (let i = 0; i < CARDS_PER_DAY; i++) {
+    // Weight each type: 1x base, halved for each time already drawn
+    const weights = CARD_TYPES.map(t => {
+      const n = counts[t] || 0;
+      if (n >= MAX_SAME_TYPE) return 0;
+      return 1 / Math.pow(2, n);
+    });
+    const totalWeight = weights.reduce((a, b) => a + b, 0);
+    let roll = Math.random() * totalWeight;
     let type;
-    for (let j = 0; j < 20; j++) {
-      type = CARD_TYPES[Math.floor(Math.random() * CARD_TYPES.length)];
-      if ((counts[type] || 0) < MAX_SAME_TYPE) break;
+    for (let j = 0; j < CARD_TYPES.length; j++) {
+      roll -= weights[j];
+      if (roll <= 0) { type = CARD_TYPES[j]; break; }
     }
+    type = type || CARD_TYPES[CARD_TYPES.length - 1];
     counts[type] = (counts[type] || 0) + 1;
     cards.push({ id: generateId(), type });
   }
