@@ -299,17 +299,6 @@ let deck, stack, completedSet, viewingDate;
 
 async function init() {
   deck = loadDeck();
-
-  // Import seed data if available (first run)
-  if (window.__SEED_CSV && deck.cards.length === 0) {
-    const parsed = parseCSV(window.__SEED_CSV);
-    for (const c of parsed) {
-      addCard(deck, c.type, c.front, c.back, c.dateAdded);
-    }
-    saveDeck(deck);
-    delete window.__SEED_CSV;
-  }
-
   viewingDate = today();
 
   // Set up UI (doesn't depend on data)
@@ -331,16 +320,23 @@ async function init() {
     FirebaseSync.onDeckChanged((remoteDeck) => {
       if (!initialLoadDone) {
         initialLoadDone = true;
-        // First sync: use Firebase data if it has cards, otherwise push local up
-        if (remoteDeck.cards.length === 0 && deck.cards.length > 0) {
-          // Firebase empty, push local data
-          ensureDailyWild(deck);
-        } else if (remoteDeck.cards.length > 0) {
-          // Firebase has data, use it as source of truth
+
+        if (remoteDeck.cards.length > 0) {
+          // Firebase has data — use it as source of truth
           deck = remoteDeck;
           localStorage.setItem(STORAGE_KEY, JSON.stringify(deck));
-          ensureDailyWild(deck);
+        } else if (deck.cards.length > 0) {
+          // Firebase empty but local has data — push local up
+        } else if (window.__SEED_CSV) {
+          // Both empty — import seed data (true first run)
+          const parsed = parseCSV(window.__SEED_CSV);
+          for (const c of parsed) {
+            addCard(deck, c.type, c.front, c.back, c.dateAdded);
+          }
+          delete window.__SEED_CSV;
         }
+
+        ensureDailyWild(deck);
         ignoreNextRemoteUpdate = true;
         stack = buildDailyStack(deck, viewingDate);
         completedSet = loadCompleted(viewingDate);
