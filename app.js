@@ -54,7 +54,7 @@ function generateDayCards() {
     const weights = CARD_TYPES.map(t => {
       const n = counts[t] || 0;
       if (n >= MAX_SAME_TYPE) return 0;
-      return 1 / Math.pow(2, n);
+      return 1 / Math.pow(4, n);
     });
     const totalWeight = weights.reduce((a, b) => a + b, 0);
     let roll = Math.random() * totalWeight;
