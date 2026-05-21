@@ -12,57 +12,46 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-// Convert deck (array-based) to Firebase (map-based)
-function deckToFirebase(deck) {
-  const cardsMap = {};
-  for (const c of deck.cards) {
-    const entry = {
-      type: c.type,
-      front: c.front,
-      back: c.back,
-      dateAdded: c.dateAdded,
-      dateLastViewed: c.dateLastViewed || null,
-    };
-    if (c.wildResolutions) entry.wildResolutions = c.wildResolutions;
-    // Legacy support
-    if (c.wildResolvedType) entry.wildResolvedType = c.wildResolvedType;
-    if (c.wildResolvedDate) entry.wildResolvedDate = c.wildResolvedDate;
-    cardsMap[c.id] = entry;
-  }
-  return { cards: cardsMap, lastWildDate: deck.lastWildDate || null };
-}
-
-// Convert Firebase (map-based) back to deck (array-based)
-function firebaseToDeck(fbData) {
-  if (!fbData) return { cards: [], lastWildDate: null };
-  const cards = [];
-  if (fbData.cards) {
-    for (const [id, c] of Object.entries(fbData.cards)) {
-      cards.push({ id, ...c });
-    }
-  }
-  return { cards, lastWildDate: fbData.lastWildDate || null };
-}
-
 window.FirebaseSync = {
-  // Promise that resolves once initial Firebase data is loaded
   ready: new Promise((resolve) => {
-    db.ref('deck').once('value', () => resolve());
+    db.ref('days').once('value', () => resolve());
   }),
 
-  saveDeck(deck) {
-    db.ref('deck').set(deckToFirebase(deck));
+  // ─── New per-date model ───
+
+  async getDayCards(date) {
+    const snap = await db.ref('days/' + date + '/cards').once('value');
+    return snap.val();
   },
+
+  saveDayCards(date, cards) {
+    db.ref('days/' + date + '/cards').set(cards);
+  },
+
+  async getAllDays() {
+    const snap = await db.ref('days').once('value');
+    return snap.val();
+  },
+
+  // ─── Legacy deck (read-only, for old date browsing) ───
+
+  async getLegacyDeck() {
+    const snap = await db.ref('deck').once('value');
+    const fbData = snap.val();
+    if (!fbData) return { cards: [] };
+    const cards = [];
+    if (fbData.cards) {
+      for (const [id, c] of Object.entries(fbData.cards)) {
+        cards.push({ id, ...c });
+      }
+    }
+    return { cards };
+  },
+
+  // ─── Completion tracking ───
 
   saveCompleted(dateKey, idsArray) {
     db.ref('completed/' + dateKey).set(idsArray);
-  },
-
-  onDeckChanged(callback) {
-    db.ref('deck').on('value', (snap) => {
-      const remoteDeck = firebaseToDeck(snap.val());
-      callback(remoteDeck);
-    });
   },
 
   offCompleted(dateKey) {
@@ -75,8 +64,11 @@ window.FirebaseSync = {
     });
   },
 
+  // ─── Admin ───
+
   clearAll() {
     db.ref('deck').set(null);
+    db.ref('days').set(null);
     db.ref('completed').set(null);
   },
 };

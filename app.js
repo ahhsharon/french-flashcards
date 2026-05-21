@@ -1,19 +1,24 @@
-// ─── Data Layer ───
+// ─── Constants ───
 
-const STORAGE_KEY = 'french-flashcards';
-const SCHEDULE_OFFSETS = [0, 1, 4, 11, 27, 58];
-const WILD_TYPES = ['Lingo', 'Reading', 'Listening', 'Speaking', 'Languish'];
-const ALL_TYPES = ['Vocab', ...WILD_TYPES, 'Wild'];
+const CARD_TYPES = ['Lingo', 'Reading', 'Listening', 'Speaking', 'Languish'];
+const CARDS_PER_DAY = 6;
 const MAX_SAME_TYPE = 3;
+const CUTOVER_DATE = '2026-05-22';
 const DISPLAY_NAMES = {
-  Vocab: 'Vocab',
   Lingo: 'Lingo',
   Reading: 'Reading',
   Listening: 'Listen',
   Speaking: 'Speaking',
   Languish: 'Phrases',
+  // Legacy types
+  Vocab: 'Vocab',
   Wild: 'Wild',
 };
+
+// Legacy constants for old date support
+const SCHEDULE_OFFSETS = [0, 1, 4, 11, 27, 58];
+
+// ─── Date Utils ───
 
 function formatLocalDate(d) {
   const y = d.getFullYear();
@@ -26,28 +31,10 @@ function today() {
   return formatLocalDate(new Date());
 }
 
-function dateNDaysAgoFrom(baseDate, n) {
-  const d = new Date(baseDate + 'T12:00:00');
-  d.setDate(d.getDate() - n);
-  return formatLocalDate(d);
-}
-
 function addDays(dateStr, n) {
   const d = new Date(dateStr + 'T12:00:00');
   d.setDate(d.getDate() + n);
   return formatLocalDate(d);
-}
-
-function loadDeck() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  return raw ? JSON.parse(raw) : { cards: [], lastWildDate: null };
-}
-
-function saveDeck(deck) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(deck));
-  if (window.FirebaseSync) {
-    FirebaseSync.saveDeck(deck);
-  }
 }
 
 function generateId() {
@@ -57,332 +44,71 @@ function generateId() {
   );
 }
 
-function addCard(deck, type, front, back, dateAdded) {
-  deck.cards.push({
-    id: generateId(),
-    type,
-    front: front || '',
-    back: back || '',
-    dateAdded: dateAdded || today(),
-    dateLastViewed: null,
-  });
-}
+// ─── Card Generation ───
 
-// ─── Daily Wild Card ───
-
-function ensureDailyWild(deck) {
-  const t = today();
-
-  // Find the earliest Wild card date as the deck start date
-  let earliest = t;
-  for (const c of deck.cards) {
-    if (c.type === 'Wild' && c.dateAdded < earliest) {
-      earliest = c.dateAdded;
-    }
-  }
-
-  // Build set of dates that already have a Wild card
-  const wildDates = new Set();
-  for (const c of deck.cards) {
-    if (c.type === 'Wild') wildDates.add(c.dateAdded);
-  }
-
-  // Add a Wild card for every day from earliest through today that's missing one
-  let added = false;
-  let d = earliest;
-  while (d <= t) {
-    if (!wildDates.has(d)) {
-      addCard(deck, 'Wild', '', '', d);
-      added = true;
-    }
-    d = addDays(d, 1);
-  }
-
-  if (added) {
-    deck.lastWildDate = t;
-    saveDeck(deck);
-  }
-}
-
-// ─── Wild Card Resolution ───
-
-function resolveWildType(stackTypes) {
-  const counts = {};
-  for (const t of stackTypes) counts[t] = (counts[t] || 0) + 1;
-
-  // Try up to 20 times to find a type under the limit
-  for (let i = 0; i < 20; i++) {
-    const pick = WILD_TYPES[Math.floor(Math.random() * WILD_TYPES.length)];
-    if ((counts[pick] || 0) < MAX_SAME_TYPE) return pick;
-  }
-  // Fallback: pick the type with the lowest count
-  return WILD_TYPES.reduce((best, t) =>
-    (counts[t] || 0) < (counts[best] || 0) ? t : best
-  );
-}
-
-// ─── Build Daily Stack ───
-
-function buildDailyStack(deck, forDate) {
-  const stack = []; // each entry: { card, offsetIndex }
-
-  for (let oi = 0; oi < SCHEDULE_OFFSETS.length; oi++) {
-    const targetDate = dateNDaysAgoFrom(forDate, SCHEDULE_OFFSETS[oi]);
-    const matches = deck.cards.filter(c => c.dateAdded === targetDate);
-    for (const m of matches) stack.push({ card: m, offsetIndex: oi });
-  }
-
-  // Resolve Wild cards: determine their display type
-  // Wild resolutions are keyed by forDate so each day's draw is stable
-  // Pre-fill resolved types: use persisted Wild resolutions if available
-  const resolvedTypes = stack.map(e => {
-    if (e.card.type === 'Wild') {
-      const orig = deck.cards.find(c => c.id === e.card.id);
-      // Check if resolution exists for this viewing date
-      if (orig && orig.wildResolutions && orig.wildResolutions[forDate]) {
-        return orig.wildResolutions[forDate];
-      }
-      // Legacy: migrate old single-date format
-      if (orig && orig.wildResolvedType && orig.wildResolvedDate === forDate) {
-        if (!orig.wildResolutions) orig.wildResolutions = {};
-        orig.wildResolutions[forDate] = orig.wildResolvedType;
-        return orig.wildResolvedType;
-      }
-      return null; // needs resolving
-    }
-    return e.card.type;
-  });
-  let deckChanged = false;
-
-  const stackResolved = [];
-  for (let i = 0; i < stack.length; i++) {
-    const { card, offsetIndex } = stack[i];
-    if (card.type === 'Wild') {
-      const original = deck.cards.find(c => c.id === card.id);
-      let resolved;
-      // Reuse already-persisted type
-      if (resolvedTypes[i]) {
-        resolved = resolvedTypes[i];
-      } else {
-        const currentTypes = resolvedTypes.filter(Boolean);
-        resolved = resolveWildType(currentTypes);
-        resolvedTypes[i] = resolved;
-        // Persist on the original card, keyed by viewing date
-        if (original) {
-          if (!original.wildResolutions) original.wildResolutions = {};
-          original.wildResolutions[forDate] = resolved;
-          deckChanged = true;
-        }
-      }
-      stackResolved.push({ ...card, resolvedType: resolved, offsetIndex });
-    } else {
-      stackResolved.push({ ...card, resolvedType: card.type, offsetIndex });
-    }
-  }
-
-  // Only update dateLastViewed when viewing today
-  if (forDate === today()) {
-    for (const item of stackResolved) {
-      const original = deck.cards.find(c => c.id === item.id);
-      if (original) original.dateLastViewed = forDate;
-    }
-  }
-
-  if (deckChanged || forDate === today()) {
-    saveDeck(deck);
-  }
-
-  return stackResolved;
-}
-
-// ─── CSV Import ───
-
-function normalizeDate(str) {
-  str = str.trim();
-  // Already YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
-  // M/D/YYYY or MM/DD/YYYY
-  const match = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (match) {
-    const m = match[1].padStart(2, '0');
-    const d = match[2].padStart(2, '0');
-    return `${match[3]}-${m}-${d}`;
-  }
-  return str;
-}
-
-function parseCSV(text) {
-  // Parse entire CSV respecting multiline quoted fields
-  const records = parseCSVRecords(text.trim());
+function generateDayCards() {
   const cards = [];
-  for (const parts of records) {
-    const type = (parts[0] || '').trim();
-    const front = (parts[1] || '').trim();
-    const back = (parts[2] || '').trim();
-    const rawDate = (parts[3] || '').trim();
-
-    // Skip header
-    if (type.toLowerCase() === 'type') continue;
-    if (!ALL_TYPES.includes(type)) continue;
-
-    const dateAdded = rawDate ? normalizeDate(rawDate) : today();
-    cards.push({ type, front, back, dateAdded });
+  const counts = {};
+  for (let i = 0; i < CARDS_PER_DAY; i++) {
+    let type;
+    for (let j = 0; j < 20; j++) {
+      type = CARD_TYPES[Math.floor(Math.random() * CARD_TYPES.length)];
+      if ((counts[type] || 0) < MAX_SAME_TYPE) break;
+    }
+    counts[type] = (counts[type] || 0) + 1;
+    cards.push({ id: generateId(), type });
   }
   return cards;
 }
 
-function parseCSVRecords(text) {
-  const records = [];
-  let i = 0;
-  while (i < text.length) {
-    const { fields, nextIndex } = parseCSVRecord(text, i);
-    records.push(fields);
-    i = nextIndex;
-  }
-  return records;
-}
+// ─── Legacy Support (dates before cutover) ───
 
-function parseCSVRecord(text, start) {
-  const fields = [];
-  let i = start;
-  let current = '';
-  let inQuotes = false;
+let legacyDeck = null;
 
-  while (i < text.length) {
-    const ch = text[i];
-    if (inQuotes) {
-      if (ch === '"' && text[i + 1] === '"') {
-        current += '"';
-        i += 2;
-      } else if (ch === '"') {
-        inQuotes = false;
-        i++;
-      } else {
-        current += ch;
-        i++;
-      }
-    } else {
-      if (ch === '"') {
-        inQuotes = true;
-        i++;
-      } else if (ch === ',') {
-        fields.push(current);
-        current = '';
-        i++;
-      } else if (ch === '\n' || (ch === '\r' && text[i + 1] === '\n')) {
-        fields.push(current);
-        i += (ch === '\r') ? 2 : 1;
-        return { fields, nextIndex: i };
-      } else {
-        current += ch;
-        i++;
-      }
-    }
-  }
-  fields.push(current);
-  return { fields, nextIndex: i };
-}
+function buildLegacyStack(forDate) {
+  if (!legacyDeck || legacyDeck.cards.length === 0) return [];
 
-function exportCSV(deck) {
-  let csv = 'type,front,back,date_added,date_last_viewed\n';
-  for (const c of deck.cards) {
-    const front = c.front.includes(',') ? `"${c.front}"` : c.front;
-    const back = c.back.includes(',') ? `"${c.back}"` : c.back;
-    csv += `${c.type},${front},${back},${c.dateAdded},${c.dateLastViewed || ''}\n`;
-  }
-  return csv;
-}
-
-// ─── UI ───
-
-let deck, stack, completedSet, viewingDate;
-
-async function init() {
-  deck = loadDeck();
-  viewingDate = today();
-
-  // Set up UI (doesn't depend on data)
-  renderDate();
-  setupVocabOverlay();
-  setupNav();
-  setupDateNav();
-  setupManage();
-
-  // If Firebase is available, wait for it and use as source of truth
-  // before running ensureDailyWild (to avoid overwrite races)
-  if (window.FirebaseSync) {
-    await FirebaseSync.ready;
-
-    // Do initial load from Firebase
-    let initialLoadDone = false;
-    let ignoreNextRemoteUpdate = false;
-
-    FirebaseSync.onDeckChanged((remoteDeck) => {
-      if (!initialLoadDone) {
-        initialLoadDone = true;
-
-        if (remoteDeck.cards.length > 0) {
-          // Firebase has data — use it as source of truth
-          deck = remoteDeck;
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(deck));
-        } else if (deck.cards.length > 0) {
-          // Firebase empty but local has data — push local up
-        } else if (window.__SEED_CSV) {
-          // Both empty — import seed data (true first run)
-          const parsed = parseCSV(window.__SEED_CSV);
-          for (const c of parsed) {
-            addCard(deck, c.type, c.front, c.back, c.dateAdded);
-          }
-          delete window.__SEED_CSV;
+  const stack = [];
+  for (const offset of SCHEDULE_OFFSETS) {
+    const targetDate = addDays(forDate, -offset);
+    const matches = legacyDeck.cards.filter(c => c.dateAdded === targetDate);
+    for (const m of matches) {
+      let displayType = m.type;
+      if (m.type === 'Wild') {
+        if (m.wildResolutions && m.wildResolutions[forDate]) {
+          displayType = m.wildResolutions[forDate];
+        } else {
+          displayType = CARD_TYPES[Math.floor(Math.random() * CARD_TYPES.length)];
         }
-
-        ensureDailyWild(deck);
-        ignoreNextRemoteUpdate = true;
-        stack = buildDailyStack(deck, viewingDate);
-        completedSet = loadCompleted(viewingDate);
-        renderList();
-        return;
       }
-
-      // Subsequent remote updates
-      if (ignoreNextRemoteUpdate) {
-        ignoreNextRemoteUpdate = false;
-        return;
-      }
-
-      if (remoteDeck.cards.length > 0) {
-        deck = remoteDeck;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(deck));
-        stack = buildDailyStack(deck, viewingDate);
-        renderList();
-      }
-    });
-
-    // Listen for remote completion changes for current viewing date
-    let currentCompletedKey = null;
-    function listenToCompleted() {
-      const key = 'completed-today-' + viewingDate;
-      if (currentCompletedKey && currentCompletedKey !== key) {
-        FirebaseSync.offCompleted(currentCompletedKey);
-      }
-      currentCompletedKey = key;
-      FirebaseSync.onCompletedChanged(key, (ids) => {
-        completedSet = new Set(ids || []);
-        localStorage.setItem(key, JSON.stringify([...completedSet]));
-        renderList();
+      stack.push({
+        id: m.id,
+        type: displayType,
+        front: m.front || '',
+        back: m.back || '',
       });
     }
-    listenToCompleted();
-
-    // Re-listen when date changes
-    window._onDateChanged = listenToCompleted;
-  } else {
-    // No Firebase — use local data only
-    ensureDailyWild(deck);
-    stack = buildDailyStack(deck, viewingDate);
-    completedSet = loadCompleted(viewingDate);
-    renderList();
   }
+  return stack;
+}
+
+// ─── Data Loading ───
+
+async function loadDayCards(date) {
+  if (date > today()) return [];
+
+  if (date < CUTOVER_DATE) {
+    return buildLegacyStack(date);
+  }
+
+  if (!window.FirebaseSync) return [];
+
+  let cards = await FirebaseSync.getDayCards(date);
+  if (!cards) {
+    cards = generateDayCards();
+    FirebaseSync.saveDayCards(date, cards);
+  }
+  return cards;
 }
 
 function loadCompleted(dateStr) {
@@ -391,25 +117,80 @@ function loadCompleted(dateStr) {
   );
 }
 
+// ─── UI State ───
+
+let viewingDate;
+let dayCards = [];
+let completedSet = new Set();
+
+// ─── Init ───
+
+async function init() {
+  viewingDate = today();
+
+  // Set up UI
+  renderDate();
+  setupDateNav();
+  setupNav();
+  setupManage();
+
+  if (window.FirebaseSync) {
+    await FirebaseSync.ready;
+
+    // Load legacy deck from Firebase for old date browsing
+    legacyDeck = await FirebaseSync.getLegacyDeck();
+  }
+
+  dayCards = await loadDayCards(viewingDate);
+  completedSet = loadCompleted(viewingDate);
+  renderList();
+
+  if (window.FirebaseSync) {
+    setupCompletionListener();
+  }
+}
+
+// ─── Completion Sync ───
+
+let currentCompletedKey = null;
+
+function setupCompletionListener() {
+  const key = 'completed-today-' + viewingDate;
+  if (currentCompletedKey === key) return;
+  if (currentCompletedKey) {
+    FirebaseSync.offCompleted(currentCompletedKey);
+  }
+  currentCompletedKey = key;
+  FirebaseSync.onCompletedChanged(key, (ids) => {
+    completedSet = new Set(ids || []);
+    localStorage.setItem(key, JSON.stringify([...completedSet]));
+    renderList();
+  });
+}
+
+// ─── Date Navigation ───
+
+async function switchToDate(newDate) {
+  viewingDate = newDate;
+  dayCards = await loadDayCards(viewingDate);
+  completedSet = loadCompleted(viewingDate);
+  renderDate();
+  renderList();
+  if (window.FirebaseSync) setupCompletionListener();
+}
+
 function renderDate() {
   const d = new Date(viewingDate + 'T12:00:00');
   const dateEl = document.getElementById('date-display');
   const isToday = viewingDate === today();
 
-  dateEl.textContent = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  dateEl.textContent = d.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
   dateEl.classList.toggle('is-today', isToday);
-
-  // Disable next button if viewing today
   document.getElementById('btn-next-day').classList.toggle('at-today', isToday);
-}
-
-function switchToDate(newDate) {
-  viewingDate = newDate;
-  stack = buildDailyStack(deck, viewingDate);
-  completedSet = loadCompleted(viewingDate);
-  renderDate();
-  renderList();
-  if (window._onDateChanged) window._onDateChanged();
 }
 
 function setupDateNav() {
@@ -436,7 +217,6 @@ function setupDateNav() {
 
   container.addEventListener('touchmove', (e) => {
     if (!swiping) return;
-    // If vertical scroll is dominant, cancel swipe detection
     const dy = Math.abs(e.touches[0].clientY - touchStartY);
     const dx = Math.abs(e.touches[0].clientX - touchStartX);
     if (dy > dx) swiping = false;
@@ -446,29 +226,16 @@ function setupDateNav() {
     if (!swiping) return;
     swiping = false;
     const dx = e.changedTouches[0].clientX - touchStartX;
-    const MIN_SWIPE = 60;
-    if (Math.abs(dx) < MIN_SWIPE) return;
-
+    if (Math.abs(dx) < 60) return;
     if (dx > 0) {
-      // Swipe right → previous day
       switchToDate(addDays(viewingDate, -1));
-    } else {
-      // Swipe left → next day
-      if (viewingDate < today()) {
-        switchToDate(addDays(viewingDate, 1));
-      }
+    } else if (viewingDate < today()) {
+      switchToDate(addDays(viewingDate, 1));
     }
   }, { passive: true });
 }
 
-function getScheduleLabel(offsetIndex) {
-  const offsets = SCHEDULE_OFFSETS;
-  const n = offsets[offsetIndex];
-  if (n === undefined) return '';
-  if (n === 0) return viewingDate === today() ? 'Today' : 'Day of';
-  if (n === 1) return '1 day ago';
-  return `${n} days ago`;
-}
+// ─── Rendering ───
 
 function escapeHTML(str) {
   const div = document.createElement('div');
@@ -476,19 +243,11 @@ function escapeHTML(str) {
   return div.innerHTML;
 }
 
-function getRowDisplayText(card) {
-  if (card.type === 'Vocab') return card.front;
-  if (card.type === 'Wild') return DISPLAY_NAMES[card.resolvedType] || card.resolvedType;
-  return DISPLAY_NAMES[card.type] || card.type;
-}
-
-// ─── List View ───
-
 function renderList() {
   const list = document.getElementById('card-list');
   const empty = document.getElementById('empty-state');
 
-  if (stack.length === 0) {
+  if (dayCards.length === 0) {
     empty.classList.remove('hidden');
     list.classList.add('hidden');
     return;
@@ -498,34 +257,25 @@ function renderList() {
   list.classList.remove('hidden');
   list.innerHTML = '';
 
-  stack.forEach((card, i) => {
+  dayCards.forEach((card) => {
     const isCompleted = completedSet.has(card.id);
-    const isVocab = card.type === 'Vocab';
+    const displayName = DISPLAY_NAMES[card.type] || card.type;
 
     const row = document.createElement('div');
     row.className = `list-row row-type-${card.type}`;
-    if (isVocab) row.classList.add('is-vocab');
     if (isCompleted) row.classList.add('completed');
-    row.dataset.index = i;
+
+    // Legacy Vocab cards show their front text; new cards show the type name
+    const label = card.front || displayName;
 
     row.innerHTML = `
-      <div class="row-type-badge">${DISPLAY_NAMES[card.type] || card.type}</div>
+      <div class="row-type-badge">${escapeHTML(displayName)}</div>
       <div class="row-content">
-        <div class="row-front">${escapeHTML(getRowDisplayText(card))}</div>
-        <div class="row-schedule">${getScheduleLabel(card.offsetIndex)}</div>
+        <div class="row-front">${escapeHTML(label)}</div>
       </div>
       <button class="row-check" aria-label="Mark complete">${isCompleted ? '\u2713' : ''}</button>
     `;
 
-    // Tap row to open vocab overlay
-    if (isVocab) {
-      row.addEventListener('click', (e) => {
-        if (e.target.closest('.row-check')) return;
-        openVocabOverlay(card);
-      });
-    }
-
-    // Check button
     row.querySelector('.row-check').addEventListener('click', (e) => {
       e.stopPropagation();
       toggleComplete(card.id, row);
@@ -550,129 +300,39 @@ function toggleComplete(cardId, rowEl) {
 
   const isCompleted = completedSet.has(cardId);
   rowEl.classList.toggle('completed', isCompleted);
-  const checkBtn = rowEl.querySelector('.row-check');
-  checkBtn.textContent = isCompleted ? '\u2713' : '';
-}
-
-// ─── Vocab Overlay ───
-
-function setupVocabOverlay() {
-  const overlay = document.getElementById('vocab-overlay');
-  const backdrop = document.getElementById('vocab-overlay-backdrop');
-  const closeBtn = document.getElementById('vocab-close');
-  const card = document.getElementById('vocab-card');
-
-  function close() {
-    overlay.classList.add('hidden');
-    card.classList.remove('flipped');
-  }
-
-  backdrop.addEventListener('click', close);
-  closeBtn.addEventListener('click', close);
-
-  card.addEventListener('click', () => {
-    card.classList.toggle('flipped');
-  });
-}
-
-function openVocabOverlay(card) {
-  const overlay = document.getElementById('vocab-overlay');
-  const cardEl = document.getElementById('vocab-card');
-
-  cardEl.classList.remove('flipped');
-  cardEl.className = 'card type-Vocab';
-
-  cardEl.querySelector('.card-front .card-type-badge').textContent = 'Vocab';
-  cardEl.querySelector('.card-front .card-content').textContent = card.front;
-  cardEl.querySelector('.card-back .card-type-badge').textContent = 'Vocab';
-  cardEl.querySelector('.card-back .card-content').textContent = card.back;
-
-  overlay.classList.remove('hidden');
+  rowEl.querySelector('.row-check').textContent = isCompleted ? '\u2713' : '';
 }
 
 // ─── Navigation ───
 
 function setupNav() {
-  const manageScreen = document.getElementById('manage-screen');
-
   document.getElementById('btn-settings').addEventListener('click', () => {
-    manageScreen.classList.remove('hidden');
+    document.getElementById('manage-screen').classList.remove('hidden');
     renderStats();
   });
-
   document.getElementById('btn-close-manage').addEventListener('click', () => {
-    manageScreen.classList.add('hidden');
+    document.getElementById('manage-screen').classList.add('hidden');
   });
 }
 
 // ─── Manage ───
 
 function setupManage() {
-  // Import
-  const fileInput = document.getElementById('csv-file');
+  // Export
+  document.getElementById('btn-export').addEventListener('click', async () => {
+    let csv = 'date,card_1,card_2,card_3,card_4,card_5,card_6\n';
 
-  document.getElementById('btn-import').addEventListener('click', () => {
-    fileInput.click();
-  });
-
-  fileInput.addEventListener('change', () => {
-    const file = fileInput.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const parsed = parseCSV(e.target.result);
-      if (parsed.length === 0) {
-        toast('No valid cards found');
-        return;
+    // Export new-format days
+    if (window.FirebaseSync) {
+      const allDays = await FirebaseSync.getAllDays();
+      if (allDays) {
+        for (const [date, day] of Object.entries(allDays).sort()) {
+          const types = (day.cards || []).map(c => c.type);
+          csv += `${date},${types.join(',')}\n`;
+        }
       }
-      for (const c of parsed) {
-        addCard(deck, c.type, c.front, c.back, c.dateAdded);
-      }
-      saveDeck(deck);
-      stack = buildDailyStack(deck, viewingDate);
-      toast(`Imported ${parsed.length} cards`);
-      renderList();
-      renderStats();
-    };
-    reader.readAsText(file);
-    fileInput.value = '';
-  });
-
-  // Add type toggle
-  document.getElementById('add-type').addEventListener('change', () => {
-    const isVocab = document.getElementById('add-type').value === 'Vocab';
-    document.getElementById('vocab-fields').classList.toggle('hidden', !isVocab);
-  });
-
-  // Set default date
-  document.getElementById('add-date').value = today();
-
-  // Add card
-  document.getElementById('btn-add').addEventListener('click', () => {
-    const type = document.getElementById('add-type').value;
-    const front = document.getElementById('add-front').value.trim();
-    const back = document.getElementById('add-back').value.trim();
-    const dateAdded = document.getElementById('add-date').value || today();
-
-    if (type === 'Vocab' && !front) {
-      toast('Front text required for Vocab');
-      return;
     }
 
-    addCard(deck, type, front, back, dateAdded);
-    saveDeck(deck);
-    stack = buildDailyStack(deck, viewingDate);
-
-    document.getElementById('add-front').value = '';
-    document.getElementById('add-back').value = '';
-    toast('Card added');
-    renderList();
-    renderStats();
-  });
-
-  // Export
-  document.getElementById('btn-export').addEventListener('click', () => {
-    const csv = exportCSV(deck);
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -686,11 +346,10 @@ function setupManage() {
   // Clear
   document.getElementById('btn-clear').addEventListener('click', () => {
     if (!confirm('Delete all flashcard data? This cannot be undone.')) return;
-    localStorage.removeItem(STORAGE_KEY);
-    deck = { cards: [], lastWildDate: null };
-    stack = [];
-    completedSet.clear();
+    localStorage.clear();
     if (window.FirebaseSync) FirebaseSync.clearAll();
+    dayCards = [];
+    completedSet.clear();
     renderList();
     renderStats();
     toast('All data cleared');
@@ -698,15 +357,17 @@ function setupManage() {
 }
 
 function renderStats() {
-  const counts = {};
-  for (const t of ALL_TYPES) counts[t] = 0;
-  for (const c of deck.cards) counts[c.type]++;
-
   const statsEl = document.getElementById('deck-stats');
+  const typeCounts = {};
+  for (const c of dayCards) {
+    typeCounts[c.type] = (typeCounts[c.type] || 0) + 1;
+  }
   statsEl.innerHTML = `
-    <div>Total cards: <strong>${deck.cards.length}</strong></div>
-    ${ALL_TYPES.map(t => `<div>${t}: <strong>${counts[t]}</strong></div>`).join('')}
-    <div style="margin-top:8px">Today's stack: <strong>${stack.length}</strong> cards</div>
+    <div>Today's cards: <strong>${dayCards.length}</strong></div>
+    ${CARD_TYPES.map(t =>
+      `<div>${DISPLAY_NAMES[t]}: <strong>${typeCounts[t] || 0}</strong></div>`
+    ).join('')}
+    <div style="margin-top:8px">Completed: <strong>${completedSet.size}</strong> / ${dayCards.length}</div>
   `;
 }
 

@@ -29,81 +29,27 @@
 
     <div id="card-list-container">
       <div id="empty-state" class="hidden">
-        <p>No cards scheduled for today.</p>
-        <p class="sub">Cards are pulled from dates: today, 1d ago, 4d ago, 11d ago, 27d ago, 58d ago.</p>
+        <p>No cards for this day.</p>
       </div>
       <div id="card-list"></div>
-    </div>
-
-    <!-- Vocab detail overlay -->
-    <div id="vocab-overlay" class="hidden">
-      <div id="vocab-overlay-backdrop"></div>
-      <div id="vocab-detail">
-        <button id="vocab-close" aria-label="Close">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-        <div id="vocab-card" class="card">
-          <div class="card-inner">
-            <div class="card-front">
-              <div class="card-type-badge"></div>
-              <div class="card-content"></div>
-            </div>
-            <div class="card-back">
-              <div class="card-type-badge"></div>
-              <div class="card-content"></div>
-            </div>
-          </div>
-        </div>
-        <p class="flip-hint">Tap card to flip</p>
-      </div>
     </div>
 
     <!-- Manage Screen -->
     <div id="manage-screen" class="screen hidden">
       <div class="manage-header">
-        <h2>Manage Deck</h2>
+        <h2>Settings</h2>
         <button id="btn-close-manage" aria-label="Close">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
       <div class="manage-section">
-        <h3>Add Card</h3>
-        <div class="form-group">
-          <label>Type</label>
-          <select id="add-type">
-            <option value="Vocab">Vocab</option>
-            <option value="Lingo">Lingo</option>
-            <option value="Reading">Reading</option>
-            <option value="Listening">Listening</option>
-            <option value="Speaking">Speaking</option>
-            <option value="Languish">Languish</option>
-            <option value="Wild">Wild</option>
-          </select>
-        </div>
-        <div class="form-group" id="vocab-fields">
-          <label>Front</label>
-          <input type="text" id="add-front" placeholder="French word/phrase">
-          <label>Back</label>
-          <input type="text" id="add-back" placeholder="English translation">
-        </div>
-        <div class="form-group">
-          <label>Date Added</label>
-          <input type="date" id="add-date">
-        </div>
-        <button id="btn-add" class="btn-primary">Add Card</button>
-      </div>
-      <div class="manage-section">
-        <h3>Import / Export</h3>
-        <p class="help-text">CSV format: type,front,back,date_added</p>
-        <input type="file" id="csv-file" accept=".csv" class="hidden">
-        <div class="btn-row">
-          <button id="btn-import" class="btn-secondary">Import CSV</button>
-          <button id="btn-export" class="btn-secondary">Export CSV</button>
-        </div>
-      </div>
-      <div class="manage-section">
-        <h3>Deck Stats</h3>
+        <h3>Today's Stats</h3>
         <div id="deck-stats"></div>
+      </div>
+      <div class="manage-section">
+        <h3>Export</h3>
+        <p class="help-text">Download all daily cards as CSV.</p>
+        <button id="btn-export" class="btn-secondary">Export CSV</button>
       </div>
       <div class="manage-section danger-zone">
         <h3>Danger Zone</h3>
@@ -115,7 +61,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
   <script src="firebase-sync.js"></script>
-  <script src="seed-data.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
