@@ -75,6 +75,7 @@ function generateDayCards() {
     counts[type] = (counts[type] || 0) + 1;
     cards.push({ id: generateId(), type });
   }
+  cards.sort((a, b) => CARD_TYPES.indexOf(a.type) - CARD_TYPES.indexOf(b.type));
   return cards;
 }
 
