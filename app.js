@@ -289,8 +289,7 @@ function renderList() {
       <button class="row-check" aria-label="Mark complete">${isCompleted ? '\u2713' : ''}</button>
     `;
 
-    row.querySelector('.row-check').addEventListener('click', (e) => {
-      e.stopPropagation();
+    row.addEventListener('click', () => {
       toggleComplete(card.id, row);
     });
 

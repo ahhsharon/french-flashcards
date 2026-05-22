@@ -142,7 +142,11 @@ header h1 {
   border-radius: 12px;
   padding: 14px 16px;
   transition: opacity 0.2s;
-  cursor: default;
+  cursor: pointer;
+}
+
+.list-row:active {
+  opacity: 0.8;
 }
 
 .list-row.completed {
