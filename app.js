@@ -377,25 +377,7 @@ async function renderStats() {
   let totalCompleted = 0;
   let daysWithCards = 0;
 
-  // Include legacy days (before cutover)
   const cutoff = addDays(today(), -30);
-  if (legacyDeck && legacyDeck.cards.length > 0) {
-    let d = cutoff > CUTOVER_DATE ? CUTOVER_DATE : cutoff;
-    const legacyEnd = CUTOVER_DATE;
-    while (d < legacyEnd) {
-      if (d >= cutoff) {
-        const stack = buildLegacyStack(d);
-        if (stack.length > 0) {
-          daysWithCards++;
-          for (const c of stack) {
-            typeCounts[c.type] = (typeCounts[c.type] || 0) + 1;
-            totalCards++;
-          }
-        }
-      }
-      d = addDays(d, 1);
-    }
-  }
 
   if (window.FirebaseSync) {
     const allDays = await FirebaseSync.getAllDays();
