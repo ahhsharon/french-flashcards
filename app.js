@@ -5,14 +5,22 @@ const CARDS_PER_DAY = 6;
 const MAX_SAME_TYPE = 3;
 const CUTOVER_DATE = '2026-05-22';
 const DISPLAY_NAMES = {
-  Lingo: '🎵 Lingo',
-  Reading: '📖 Reading',
-  Listening: '🎧 Listen',
-  Speaking: '🗣️ Speaking',
-  Languish: '💬 Phrases',
-  // Legacy types
-  Vocab: '🃏 Vocab',
-  Wild: '🎲 Wild',
+  Lingo: 'Lingo',
+  Reading: 'Reading',
+  Listening: 'Listen',
+  Speaking: 'Speaking',
+  Languish: 'Phrases',
+  Vocab: 'Vocab',
+  Wild: 'Wild',
+};
+const EMOJIS = {
+  Lingo: '🎵',
+  Reading: '📘',
+  Listening: '🎧',
+  Speaking: '🎙️',
+  Languish: '🇫🇷',
+  Vocab: '🃏',
+  Wild: '🎲',
 };
 
 // Legacy constants for old date support
@@ -274,8 +282,10 @@ function renderList() {
     row.className = `list-row row-type-${card.type}`;
     if (isCompleted) row.classList.add('completed');
 
+    const emoji = EMOJIS[card.type] || '';
     row.innerHTML = `
-      <div class="row-type-badge">${escapeHTML(displayName)}</div>
+      <div class="row-icon">${emoji}</div>
+      <div class="row-label">${escapeHTML(displayName)}</div>
       <button class="row-check" aria-label="Mark complete">${isCompleted ? '\u2713' : ''}</button>
     `;
 

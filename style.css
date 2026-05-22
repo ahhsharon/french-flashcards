@@ -18,12 +18,17 @@
   --danger: #ff4757;
   --success: #2ed573;
   --type-vocab: #ff6b81;
-  --type-lingo: #ffa502;
-  --type-reading: #70a1ff;
-  --type-listening: #7bed9f;
-  --type-speaking: #eccc68;
-  --type-languish: #a29bfe;
+  --type-lingo: #ffd23f;
+  --type-reading: #ff6b35;
+  --type-listening: #00c9a7;
+  --type-speaking: #4e7fff;
+  --type-languish: #c084fc;
   --type-wild: #ff6348;
+  --type-lingo-muted: #b3922b;
+  --type-reading-muted: #b34a25;
+  --type-listening-muted: #008c75;
+  --type-speaking-muted: #3659b3;
+  --type-languish-muted: #865cb3;
   --radius: 16px;
 }
 
@@ -132,10 +137,10 @@ header h1 {
 .list-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   background: var(--surface);
   border-radius: 12px;
-  padding: 16px;
+  padding: 14px 16px;
   transition: opacity 0.2s;
   cursor: default;
 }
@@ -144,21 +149,35 @@ header h1 {
   opacity: 0.4;
 }
 
-.row-type-badge {
-  flex: 1;
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  padding: 0;
+.row-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+  border: 2.5px solid;
 }
 
-.row-type-Vocab .row-type-badge { color: var(--type-vocab); }
-.row-type-Lingo .row-type-badge { color: var(--type-lingo); }
-.row-type-Reading .row-type-badge { color: var(--type-reading); }
-.row-type-Listening .row-type-badge { color: var(--type-listening); }
-.row-type-Speaking .row-type-badge { color: var(--type-speaking); }
-.row-type-Languish .row-type-badge { color: var(--type-languish); }
-.row-type-Wild .row-type-badge { color: var(--type-wild); }
+.row-label {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.row-type-Lingo .row-icon { background: var(--type-lingo); border-color: var(--type-lingo-muted); }
+.row-type-Reading .row-icon { background: var(--type-reading); border-color: var(--type-reading-muted); }
+.row-type-Listening .row-icon { background: var(--type-listening); border-color: var(--type-listening-muted); }
+.row-type-Speaking .row-icon { background: var(--type-speaking); border-color: var(--type-speaking-muted); }
+.row-type-Languish .row-icon { background: var(--type-languish); border-color: var(--type-languish-muted); }
+
+.row-type-Lingo .row-label { color: var(--type-lingo); }
+.row-type-Reading .row-label { color: var(--type-reading); }
+.row-type-Listening .row-label { color: var(--type-listening); }
+.row-type-Speaking .row-label { color: var(--type-speaking); }
+.row-type-Languish .row-label { color: var(--type-languish); }
 
 .row-check {
   flex-shrink: 0;
