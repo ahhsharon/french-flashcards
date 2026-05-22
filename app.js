@@ -126,6 +126,8 @@ async function loadDayCards(date) {
     cards = generateDayCards();
     FirebaseSync.saveDayCards(date, cards);
   }
+  // Always sort on read to ensure consistent display order
+  cards.sort((a, b) => CARD_TYPES.indexOf(a.type) - CARD_TYPES.indexOf(b.type));
   return cards;
 }
 
