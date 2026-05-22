@@ -369,18 +369,51 @@ function setupManage() {
   });
 }
 
-function renderStats() {
+async function renderStats() {
   const statsEl = document.getElementById('deck-stats');
+  statsEl.innerHTML = '<div style="color:var(--text-dim)">Loading...</div>';
+
   const typeCounts = {};
-  for (const c of dayCards) {
-    typeCounts[c.type] = (typeCounts[c.type] || 0) + 1;
+  let totalCards = 0;
+  let totalCompleted = 0;
+  let daysWithCards = 0;
+
+  if (window.FirebaseSync) {
+    const allDays = await FirebaseSync.getAllDays();
+    if (allDays) {
+      const cutoff = addDays(today(), -30);
+      for (const [date, day] of Object.entries(allDays)) {
+        if (date < cutoff) continue;
+        const cards = day.cards || [];
+        daysWithCards++;
+        for (const c of cards) {
+          typeCounts[c.type] = (typeCounts[c.type] || 0) + 1;
+          totalCards++;
+        }
+      }
+    }
+
+    // Count completions for the last 30 days
+    const snap = await FirebaseSync.getAllCompleted();
+    if (snap) {
+      const cutoff = addDays(today(), -30);
+      for (const [key, ids] of Object.entries(snap)) {
+        const date = key.replace('completed-today-', '');
+        if (date < cutoff) continue;
+        totalCompleted += (ids || []).length;
+      }
+    }
   }
+
   statsEl.innerHTML = `
-    <div>Today's cards: <strong>${dayCards.length}</strong></div>
-    ${CARD_TYPES.map(t =>
-      `<div>${DISPLAY_NAMES[t]}: <strong>${typeCounts[t] || 0}</strong></div>`
-    ).join('')}
-    <div style="margin-top:8px">Completed: <strong>${completedSet.size}</strong> / ${dayCards.length}</div>
+    <div>Days tracked: <strong>${daysWithCards}</strong></div>
+    <div>Total cards: <strong>${totalCards}</strong></div>
+    <div style="margin-top:8px">
+      ${CARD_TYPES.map(t =>
+        `<div>${EMOJIS[t]} ${DISPLAY_NAMES[t]}: <strong>${typeCounts[t] || 0}</strong></div>`
+      ).join('')}
+    </div>
+    <div style="margin-top:8px">Completed: <strong>${totalCompleted}</strong> / ${totalCards}</div>
   `;
 }
 

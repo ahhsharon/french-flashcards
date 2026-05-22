@@ -64,6 +64,11 @@ window.FirebaseSync = {
     });
   },
 
+  async getAllCompleted() {
+    const snap = await db.ref('completed').once('value');
+    return snap.val();
+  },
+
   // ─── Admin ───
 
   clearAll() {
